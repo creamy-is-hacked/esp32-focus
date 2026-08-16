@@ -1,6 +1,14 @@
 # esp32-focus
 
-A polished, fully offline Pomodoro timer for an ESP32 with a 320×240 touch display. It uses stable, oversized countdown digits, restrained state colors, a four-focus cycle indicator, automatic session progression, and flicker-free partial redraws.
+A polished, fully offline Pomodoro timer for an ESP32 with a 320×240 touch display. Its botanical interface combines a near-black landscape, desaturated greens, cream typography, a circular progress ring, and sparing peach accents with stable fixed-position countdown digits.
+
+## Interface
+
+- The thin circular ring tracks the session continuously; its peach endpoint moves smoothly instead of stepping once per second.
+- Changed countdown digits fade independently while unchanged digits remain stationary.
+- **Ready** gently breathes the Start indicator, **Start** produces one short accent pulse, and **Paused** softly breathes the dimmed progress ring.
+- Completion fills the ring, performs one bright sweep, then advances automatically.
+- The four header dots show focus-cycle progress: green is complete, peach is current, and dim dots remain.
 
 ## Hardware
 
