@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="430" viewBox="0 0 1120 430" role="img" aria-labelledby="title desc">
+  <title id="title">ESP32 Focus botanical screen previews</title>
+  <desc id="desc">Three illustrated ESP32 Focus display screens: startup, focus timer, and break transition.</desc>
+  <defs>
+    <style>
+      .label { fill:#e6ead2; font:700 18px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:2px }
+      .micro { fill:#7e8d7f; font:600 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:1px }
+      .small { fill:#e6ead2; font:700 12px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:1px }
+      .digits { fill:#e6ead2; font:700 43px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:2px }
+      .title { fill:#e6ead2; font:700 24px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:4px }
+      .caption { fill:#a7c69f; font:700 13px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:2px }
+    </style>
+    <filter id="softGlow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="3"/></filter>
+    <g id="firefly"><circle r="4" fill="#ffb08a" opacity=".23" filter="url(#softGlow)"/><circle r="1.4" fill="#ffb08a"/></g>
+    <g id="leaf"><path d="M0 7 C4 1 10 -2 13 0 C10 7 4 9 0 7Z" fill="#a7c69f"/><path d="M1 6 L10 1" stroke="#0f1412" stroke-width="1" opacity=".65"/></g>
+  </defs>
+  <rect width="1120" height="430" rx="28" fill="#101613"/>
+  <text x="56" y="58" class="caption">ESP32 FOCUS · BOTANICAL DISPLAY PREVIEWS</text>
+  <text x="56" y="86" class="micro">320 × 240 TOUCH TFT · STARTUP, FOCUS, AND BREAK STATES</text>
+
+  <!-- Startup -->
+  <g transform="translate(56 120)">
+    <rect width="320" height="240" rx="12" fill="#0f1412" stroke="#2d3a33" stroke-width="2"/>
+    <circle cx="39" cy="61" r="18" fill="#ffb08a" opacity=".25"/>
+    <ellipse cx="39" cy="61" rx="55" ry="35" fill="none" stroke="#7e8d7f" stroke-opacity=".28"/>
+    <path d="M0 180 L0 240 L124 240Z" fill="#110f10"/><path d="M0 213 L91 157 L184 240Z" fill="#1b231f"/><path d="M92 240 L226 174 L320 232 L320 240Z" fill="#2d3a33"/>
+    <use href="#leaf" transform="translate(150 43) scale(1.4)"/>
+    <text x="160" y="96" text-anchor="middle" class="label">ESP32 FOCUS</text>
+    <text x="160" y="122" text-anchor="middle" class="micro">AWAKENING DISPLAY</text>
+    <rect x="72" y="146" width="176" height="7" rx="3.5" fill="#1b231f"/>
+    <rect x="72" y="146" width="124" height="7" rx="3.5" fill="#a7c69f"/>
+    <circle cx="196" cy="149.5" r="3" fill="#ffb08a"/>
+    <text x="160" y="180" text-anchor="middle" class="micro">STARTUP</text>
+    <use href="#firefly" transform="translate(285 54)"/><use href="#firefly" transform="translate(299 80)"/>
+  </g>
+
+  <!-- Focus -->
+  <g transform="translate(400 120)">
+    <rect width="320" height="240" rx="12" fill="#0f1412" stroke="#2d3a33" stroke-width="2"/>
+    <path d="M0 178 L84 150 L154 213 L0 213Z" fill="#1b231f"/><path d="M103 212 L235 159 L320 210 L320 240 L0 240 L0 198Z" fill="#2d3a33"/>
+    <path d="M5 190 C22 165 34 151 48 129 M315 190 C298 165 286 151 272 129" fill="none" stroke="#2d3a33" stroke-width="2"/>
+    <use href="#leaf" transform="translate(13 14)"/>
+    <text x="31" y="20" class="small">FOCUS</text>
+    <text x="96" y="18" class="micro" fill="#a7c69f">Runtime : 00:02:14</text>
+    <circle cx="260" cy="15" r="3" fill="#ffb08a"/><circle cx="274" cy="15" r="3" fill="#2d3a33"/><circle cx="288" cy="15" r="3" fill="#2d3a33"/><circle cx="302" cy="15" r="3" fill="#2d3a33"/>
+    <path d="M12 34 H308" stroke="#2d3a33"/>
+    <circle cx="160" cy="109" r="77" fill="none" stroke="#31e7" stroke-width="5" opacity=".7"/>
+    <path d="M160 186 A77 77 0 0 1 88 138" fill="none" stroke="#a7c69f" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="88" cy="138" r="4" fill="#ffb08a"/>
+    <text x="160" y="83" text-anchor="middle" class="micro">DEEP WORK</text>
+    <text x="160" y="128" text-anchor="middle" class="digits">24:16</text>
+    <text x="160" y="148" text-anchor="middle" class="micro">FOCUS · RUNNING</text>
+    <rect x="105" y="197" width="110" height="38" rx="15" fill="#2d3a33" stroke="#a7c69f"/>
+    <text x="160" y="221" text-anchor="middle" class="small">PAUSE</text>
+    <use href="#firefly" transform="translate(67 104)"/><use href="#firefly" transform="translate(267 72)"/><use href="#firefly" transform="translate(291 102)"/>
+  </g>
+
+  <!-- Break -->
+  <g transform="translate(744 120)">
+    <rect width="320" height="240" rx="12" fill="#0f1412" stroke="#2d3a33" stroke-width="2"/>
+    <circle cx="38" cy="62" r="18" fill="#ffb08a" opacity=".24"/>
+    <ellipse cx="39" cy="62" rx="55" ry="35" fill="none" stroke="#ffb08a" stroke-opacity=".22"/>
+    <path d="M0 182 L0 240 L124 240Z" fill="#110f10"/><path d="M0 213 L91 157 L184 240Z" fill="#1b231f"/><path d="M92 240 L226 174 L320 232 L320 240Z" fill="#2d3a33"/>
+    <use href="#leaf" transform="translate(151 39)"/>
+    <rect x="130" y="63" width="60" height="20" rx="10" fill="#1b231f" stroke="#ffb08a" stroke-opacity=".55"/>
+    <text x="160" y="77" text-anchor="middle" class="micro" fill="#ffb08a">05 MIN</text>
+    <text x="160" y="113" text-anchor="middle" class="title">BREATHE</text>
+    <text x="160" y="139" text-anchor="middle" class="micro">A MOMENT TO RESET</text>
+    <rect x="120" y="159" width="80" height="6" rx="3" fill="#1b231f"/>
+    <rect x="120" y="159" width="56" height="6" rx="3" fill="#ffb08a"/>
+    <circle cx="176" cy="162" r="3" fill="#ffb08a"/>
+    <text x="160" y="184" text-anchor="middle" class="micro">SHORT BREAK</text>
+    <use href="#firefly" transform="translate(286 52)"/><use href="#firefly" transform="translate(298 79)"/>
+  </g>
+</svg>
