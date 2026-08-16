@@ -4,9 +4,16 @@ A polished, fully offline Pomodoro timer for an ESP32 with a 320×240 touch disp
 
 ## Interface
 
-- The thin circular ring tracks the session continuously; its peach endpoint moves smoothly instead of stepping once per second.
-- Changed countdown digits fade independently while unchanged digits remain stationary.
-- **Ready** gently breathes the Start indicator, **Start** produces one short accent pulse, and **Paused** softly breathes the dimmed progress ring.
+- Startup opens with a calm botanical loading splash before revealing the timer.
+- Focus, short-break, and long-break sessions each have a custom transition screen with a duration pill and restrained progress flourish.
+- Layered hills, contour lines, foreground sprigs, and softly flickering fireflies give the scenery greater depth.
+- Screen changes use a dark botanical veil and staged content reveal; four fireflies move around the upper progress circle, four more roam gently through the side scenery, and seven background lights softly flicker.
+- A detailed laurel frame surrounds the timer, growing twelve paired botanical milestones from bottom to top with companion leaves, fine veins, peach buds, and a restrained glow.
+- The thin circular ring begins empty and grows clockwise with elapsed time using flicker-free incremental updates.
+- Changed countdown digits fade independently while unchanged digits remain stationary, with the complete timer kept inside the progress circle.
+- Compact in-ring labels keep Focus, Break, running, resting, and paused states clear of the progress circle.
+- The top bar shows `Runtime : HH:MM:SS`, the total uptime since the device booted.
+- **Ready** shows a stable Start indicator, **Start** produces one short accent pulse, and **Paused** softly breathes the dimmed progress ring.
 - Completion fills the ring, performs one bright sweep, then advances automatically.
 - The four header dots show focus-cycle progress: green is complete, peach is current, and dim dots remain.
 
@@ -41,6 +48,7 @@ The display runs in landscape rotation 1 over HSPI at 26 MHz. These values come 
 - Focus sessions are 25 minutes, short breaks are 5 minutes, and every fourth focus is followed by a 15-minute long break.
 - A completed session briefly shows **Session complete**, advances automatically, and starts the next session.
 - The four dots at the top-right show progress through the current focus cycle.
+- **Runtime** shows total elapsed time since boot in the top bar.
 
 ## Install, build, and flash
 
@@ -81,6 +89,7 @@ constexpr uint8_t FOCUSES_PER_CYCLE = 4;
 esp32-focus/
 ├── platformio.ini  # board, library, pins, upload settings
 ├── src/main.cpp    # timer state machine, touch input, and UI
+├── docs/screens.svg # visual screen previews
 ├── README.md
 └── .gitignore
 ```
@@ -93,6 +102,8 @@ esp32-focus/
 - **Touch is offset:** the included calibration matches this display in landscape rotation 1. Adjust the `200` and `3900` endpoints in `readTouch()` only after collecting raw corner readings.
 - **Unstable upload at 921600 baud:** temporarily use `pio run --target upload --upload-port <port> --project-option "upload_speed=115200"`.
 
-## Screenshot
+## Screen previews
 
-Add a front-facing device photo here after enclosure installation.
+The visual strip below represents the startup, focus, and break screens as rendered by the firmware.
+
+![ESP32 Focus botanical screen previews](docs/screens.svg)
