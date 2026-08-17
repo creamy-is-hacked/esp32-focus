@@ -21,9 +21,8 @@ constexpr uint8_t FOCUSES_PER_CYCLE = 4;
 constexpr uint32_t STARTUP_SPLASH_MS = 2400;
 constexpr uint32_t SESSION_SPLASH_MS = 1050;
 constexpr uint32_t COMPLETION_FRAME_MS = 42;
-constexpr uint32_t FOCUS_THOUGHT_INTERVAL_MS = 6000;
 constexpr uint32_t FOCUS_THOUGHT_FRAME_MS = 30;
-constexpr uint32_t FOCUS_THOUGHT_WAVE_PERIOD_MS = 2600;
+constexpr uint32_t FOCUS_THOUGHT_TRANSITION_MS = 1050;
 constexpr int16_t FOCUS_THOUGHT_CHAR_W = 6;
 constexpr int16_t FOCUS_THOUGHT_X = 103;
 constexpr int16_t FOCUS_THOUGHT_Y = 63;
@@ -105,8 +104,9 @@ uint8_t lastLaurelCount = 0;
 bool startPulseActive = false;
 uint32_t startPulseAt = 0;
 int8_t lastFocusThought = -1;
+int8_t nextFocusThought = -1;
 uint32_t lastFocusThoughtFrame = 0;
-int32_t lastFocusThoughtSlot = -1;
+int32_t lastFocusThoughtCycle = -1;
 
 constexpr const char* FOCUS_THOUGHTS[] = {
   "RUMINATING", "COMBOBULATING", "COGITATING", "MARINATING", "CONSIDERING",
@@ -117,6 +117,15 @@ constexpr const char* FOCUS_THOUGHTS[] = {
   "FORMULATING", "INVENTING", "BREWING", "SHAPING", "FLOWING"
 };
 constexpr uint8_t FOCUS_THOUGHT_COUNT = sizeof(FOCUS_THOUGHTS) / sizeof(FOCUS_THOUGHTS[0]);
+
+uint8_t pickFocusThought(int8_t avoid) {
+  uint8_t thought = uint8_t(esp_random() % FOCUS_THOUGHT_COUNT);
+  if (avoid >= 0 && thought == uint8_t(avoid)) {
+    thought = uint8_t((thought + 1 + esp_random() % (FOCUS_THOUGHT_COUNT - 1)) %
+                      FOCUS_THOUGHT_COUNT);
+  }
+  return thought;
+}
 
 uint16_t mixColor(uint16_t a, uint16_t b, uint8_t amount) {
   const uint16_t ar = (a >> 11) & 0x1F, ag = (a >> 5) & 0x3F, ab = a & 0x1F;
@@ -911,22 +920,25 @@ void drawFocusThought(uint32_t now, bool force = false) {
       display.fillRect(FOCUS_THOUGHT_X, FOCUS_THOUGHT_Y,
                        FOCUS_THOUGHT_W, FOCUS_THOUGHT_H, COL_BG);
       lastFocusThought = -1;
+      nextFocusThought = -1;
       lastFocusThoughtFrame = 0;
-      lastFocusThoughtSlot = -1;
+      lastFocusThoughtCycle = -1;
     }
     return;
   }
 
   const uint32_t thoughtAge = elapsedMs(now);
-  const int32_t thoughtSlot = int32_t(thoughtAge / FOCUS_THOUGHT_INTERVAL_MS);
-  if (thoughtSlot != lastFocusThoughtSlot || lastFocusThought < 0) {
-    uint8_t thought = uint8_t(esp_random() % FOCUS_THOUGHT_COUNT);
-    if (lastFocusThought >= 0 && thought == uint8_t(lastFocusThought)) {
-      thought = uint8_t((thought + 1 + esp_random() % (FOCUS_THOUGHT_COUNT - 1)) %
-                        FOCUS_THOUGHT_COUNT);
+  constexpr uint32_t cycleMs = FOCUS_THOUGHT_TRANSITION_MS * 2;
+  const int32_t thoughtCycle = int32_t(thoughtAge / cycleMs);
+  if (thoughtCycle != lastFocusThoughtCycle || lastFocusThought < 0 || nextFocusThought < 0) {
+    if (lastFocusThought < 0) {
+      lastFocusThought = int8_t(pickFocusThought(-1));
+      nextFocusThought = int8_t(pickFocusThought(lastFocusThought));
+    } else {
+      lastFocusThought = nextFocusThought;
+      nextFocusThought = int8_t(pickFocusThought(lastFocusThought));
     }
-    lastFocusThought = int8_t(thought);
-    lastFocusThoughtSlot = thoughtSlot;
+    lastFocusThoughtCycle = thoughtCycle;
   }
   const uint8_t thought = uint8_t(lastFocusThought);
   if (!force && now - lastFocusThoughtFrame < FOCUS_THOUGHT_FRAME_MS) return;
@@ -943,13 +955,31 @@ void drawFocusThought(uint32_t now, bool force = false) {
   uint8_t length = 0;
   while (word[length] != '\0') ++length;
   const int16_t firstX = RING_X - int16_t((length - 1) * FOCUS_THOUGHT_CHAR_W / 2);
+  const uint32_t phase = thoughtAge % cycleMs;
+  const uint32_t fadeOutStart = FOCUS_THOUGHT_TRANSITION_MS;
+  const bool fadingIn = phase < FOCUS_THOUGHT_TRANSITION_MS;
+  const bool fadingOut = phase >= fadeOutStart;
+  const uint32_t transitionAge = fadingIn ? phase : phase - fadeOutStart;
+  const uint32_t transitionWidth = FOCUS_THOUGHT_TRANSITION_MS;
   for (uint8_t i = 0; i < length; ++i) {
-    // A slow opacity wave travels left-to-right across a fixed baseline. Each
-    // letter has a slightly different period and phase, so the motion stays
-    // asynchronous without bouncing or drifting vertically.
-    const uint32_t period = FOCUS_THOUGHT_WAVE_PERIOD_MS + uint32_t((i % 5) * 97UL);
-    const uint32_t phaseOffset = uint32_t(i * 181UL + i * i * 17UL);
-    const uint8_t alpha = breathe(now + phaseOffset, period, 28, 185);
+    uint8_t alpha = 185;
+    if (fadingIn || fadingOut) {
+      const int32_t letterProgress = int32_t(
+        (transitionAge * uint32_t(length + 1) * 256UL) / transitionWidth) -
+        int32_t(i * 256U);
+      if (fadingIn) {
+        if (letterProgress <= 0) alpha = 0;
+        else if (letterProgress < 256) {
+          alpha = uint8_t((letterProgress * 185L) / 256L);
+        }
+      } else {
+        if (letterProgress >= 256) alpha = 0;
+        else if (letterProgress > 0) {
+          alpha = uint8_t(185 - (letterProgress * 185L) / 256L);
+        }
+      }
+    }
+    if (alpha == 0) continue;
     char letter[2] = {word[i], '\0'};
     display.setTextColor(mixColor(COL_BG, COL_GREEN, alpha), COL_BG);
     display.drawString(letter, firstX + i * FOCUS_THOUGHT_CHAR_W,
