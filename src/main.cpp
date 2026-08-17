@@ -18,15 +18,22 @@ constexpr uint8_t FOCUS_MINUTES = 25;
 constexpr uint8_t SHORT_BREAK_MINUTES = 5;
 constexpr uint8_t LONG_BREAK_MINUTES = 15;
 constexpr uint8_t FOCUSES_PER_CYCLE = 4;
-constexpr uint32_t COMPLETE_HOLD_MS = 480;
 constexpr uint32_t STARTUP_SPLASH_MS = 2400;
 constexpr uint32_t SESSION_SPLASH_MS = 1050;
+constexpr uint32_t COMPLETION_FRAME_MS = 42;
+constexpr uint32_t FOCUS_THOUGHT_INTERVAL_MS = 6000;
+constexpr uint32_t FOCUS_THOUGHT_FRAME_MS = 30;
+constexpr uint32_t FOCUS_THOUGHT_WAVE_PERIOD_MS = 2600;
+constexpr int16_t FOCUS_THOUGHT_CHAR_W = 6;
+constexpr int16_t FOCUS_THOUGHT_X = 103;
+constexpr int16_t FOCUS_THOUGHT_Y = 63;
+constexpr int16_t FOCUS_THOUGHT_W = 114;
+constexpr int16_t FOCUS_THOUGHT_H = 14;
 
 #ifdef ESP32_FOCUS_SELF_TEST
 constexpr uint32_t TEST_FOCUS_MS = 2000;
 constexpr uint32_t TEST_SHORT_BREAK_MS = 1000;
 constexpr uint32_t TEST_LONG_BREAK_MS = 1500;
-constexpr uint32_t TEST_COMPLETE_HOLD_MS = 420;
 #endif
 
 // Reference-image palette converted to RGB565.
@@ -70,6 +77,7 @@ uint32_t accumulatedMs = 0;
 uint32_t runStartedAt = 0;
 uint32_t completedAt = 0;
 uint32_t lastHealthLog = 0;
+uint32_t lastCompletionFrame = 0;
 
 char visibleDigits[4] = {'2', '5', '0', '0'};
 char fromDigits[4] = {'2', '5', '0', '0'};
@@ -96,6 +104,19 @@ int16_t backgroundFireflyY[4] = {-1, -1, -1, -1};
 uint8_t lastLaurelCount = 0;
 bool startPulseActive = false;
 uint32_t startPulseAt = 0;
+int8_t lastFocusThought = -1;
+uint32_t lastFocusThoughtFrame = 0;
+int32_t lastFocusThoughtSlot = -1;
+
+constexpr const char* FOCUS_THOUGHTS[] = {
+  "RUMINATING", "COMBOBULATING", "COGITATING", "MARINATING", "CONSIDERING",
+  "PROCESSING", "SYNTHESIZING", "BRAINSTORMING", "IDEATING", "REFLECTING",
+  "ANALYZING", "EXPLORING", "CONNECTING", "DISCOVERING", "IMAGINING",
+  "CREATING", "FOCUSING", "THINKING", "REASONING", "CONCENTRATING",
+  "CALCULATING", "VISUALIZING", "PLANNING", "DEEPENING", "UNRAVELING",
+  "FORMULATING", "INVENTING", "BREWING", "SHAPING", "FLOWING"
+};
+constexpr uint8_t FOCUS_THOUGHT_COUNT = sizeof(FOCUS_THOUGHTS) / sizeof(FOCUS_THOUGHTS[0]);
 
 uint16_t mixColor(uint16_t a, uint16_t b, uint8_t amount) {
   const uint16_t ar = (a >> 11) & 0x1F, ag = (a >> 5) & 0x3F, ab = a & 0x1F;
@@ -127,14 +148,6 @@ uint32_t sessionDurationMs() {
   }
 #endif
   return 0;
-}
-
-uint32_t completeHoldMs() {
-#ifdef ESP32_FOCUS_SELF_TEST
-  return TEST_COMPLETE_HOLD_MS;
-#else
-  return COMPLETE_HOLD_MS;
-#endif
 }
 
 uint16_t baseAccent() {
@@ -246,6 +259,105 @@ void drawBotanicalSprig(int16_t x, int16_t y, int8_t direction, uint16_t color) 
     stemX = nextX;
     stemY = nextY;
   }
+}
+
+uint8_t completionFlash(uint32_t now) {
+  // A sharp opening flare followed by a slower heartbeat keeps the completion
+  // state impossible to miss without making the display look like a warning
+  // beacon. This repeats for as long as the user leaves the phase untouched.
+  const uint32_t beat = now % 1700UL;
+  if (beat < 240UL) return uint8_t(245UL - (beat * 165UL) / 240UL);
+  if (beat < 420UL) return uint8_t(80UL + ((beat - 240UL) * 70UL) / 180UL);
+  return breathe(now + 510UL, 1700UL, 45, 155);
+}
+
+void drawCompletionPetal(int16_t centerX, int16_t centerY,
+                         int16_t tipX, int16_t tipY, uint16_t color) {
+  const int16_t dx = tipX - centerX;
+  const int16_t dy = tipY - centerY;
+  const int16_t midX = centerX + dx / 2;
+  const int16_t midY = centerY + dy / 2;
+  const int16_t perpendicularX = -dy / 5;
+  const int16_t perpendicularY = dx / 5;
+  display.fillTriangle(tipX, tipY,
+                       midX + perpendicularX, midY + perpendicularY,
+                       midX - perpendicularX, midY - perpendicularY, color);
+}
+
+void drawCompletionBloom(uint32_t now) {
+  constexpr int16_t BLOOM_X = 108;
+  constexpr int16_t BLOOM_Y = 78;
+  constexpr int16_t BLOOM_W = 104;
+  constexpr int16_t BLOOM_H = 52;
+  const uint16_t accent = baseAccent();
+  const uint8_t flash = completionFlash(now);
+
+  // Only this small opaque patch is refreshed. The card, text, and side
+  // foliage remain untouched, avoiding a large SPI transfer every frame.
+  display.fillRect(BLOOM_X, BLOOM_Y, BLOOM_W, BLOOM_H, COL_SURFACE);
+
+  // A rotating eight-petal bloom and its flare create the persistent visual
+  // signal while retaining the same quiet botanical language as the timer.
+  const float rotation = float(now % 3600UL) / 3600.0f * 2.0f * PI;
+  const int16_t bloomRadius = 28 + int16_t(flash / 13);
+  const uint16_t shimmer = mixColor(COL_SURFACE, COL_PEACH, flash);
+  for (uint8_t i = 0; i < 8; ++i) {
+    const float angle = rotation + float(i) * PI / 4.0f;
+    const int16_t tipX = 160 + int16_t(roundf(cosf(angle) * bloomRadius));
+    const int16_t tipY = 105 + int16_t(roundf(sinf(angle) * bloomRadius * 0.48f));
+    drawCompletionPetal(160, 105, tipX, tipY,
+                        i % 2 == 0 ? shimmer : mixColor(COL_SURFACE, accent, flash));
+  }
+  display.fillCircle(160, 105, 4 + flash / 100, shimmer);
+  const uint8_t rayAlpha = 55 + flash / 2;
+  const int16_t rayLength = 43 + int16_t(flash / 8);
+  for (uint8_t i = 0; i < 8; ++i) {
+    const float angle = float(i) * PI / 4.0f;
+    display.drawLine(160 + int16_t(roundf(cosf(angle) * 35.0f)),
+                     105 + int16_t(roundf(sinf(angle) * 18.0f)),
+                     160 + int16_t(roundf(cosf(angle) * rayLength)),
+                     105 + int16_t(roundf(sinf(angle) * rayLength * 0.48f)),
+                     mixColor(COL_SURFACE, COL_CREAM, rayAlpha));
+  }
+}
+
+void drawCompletionAlert(uint32_t now, bool force = false) {
+  if (!force && now - lastCompletionFrame < COMPLETION_FRAME_MS) return;
+  lastCompletionFrame = now;
+
+  constexpr int16_t CARD_X = 38;
+  constexpr int16_t CARD_Y = 49;
+  constexpr int16_t CARD_W = 244;
+  constexpr int16_t CARD_H = 136;
+  if (force) {
+    const uint16_t accent = baseAccent();
+    const uint8_t flash = completionFlash(now);
+    const uint16_t edge = mixColor(COL_SURFACE, accent, 145 + flash / 3);
+    const uint16_t leaf = mixColor(COL_SURFACE, accent, 125 + flash / 2);
+
+    // This large card is composed once when completion begins. Redrawing it
+    // on every animation tick was the source of the visible refresh churn.
+    display.fillRoundRect(CARD_X, CARD_Y, CARD_W, CARD_H, 18, COL_SURFACE);
+    display.drawRoundRect(CARD_X, CARD_Y, CARD_W, CARD_H, 18, edge);
+    display.drawRoundRect(CARD_X + 3, CARD_Y + 3, CARD_W - 6, CARD_H - 6, 15,
+                          mixColor(COL_SURFACE, COL_PEACH, flash / 2));
+
+    drawBotanicalSprig(54, 171, 1, leaf);
+    drawBotanicalSprig(266, 171, -1, leaf);
+    display.fillCircle(57, 137, 2, mixColor(COL_SURFACE, COL_PEACH, 170));
+    display.fillCircle(263, 137, 2, mixColor(COL_SURFACE, COL_PEACH, 170));
+
+    display.setTextDatum(MC_DATUM);
+    display.setTextColor(COL_PEACH, COL_SURFACE);
+    display.drawString("PHASE COMPLETE", RING_X, 71, 1);
+    display.setTextColor(COL_CREAM, COL_SURFACE);
+    display.drawString(session == Session::Focus ? "FOCUS COMPLETE" : "BREAK COMPLETE",
+                       RING_X, 137, 2);
+    display.setTextColor(mixColor(COL_SURFACE, COL_CREAM, 185), COL_SURFACE);
+    display.drawString("TAP ANYWHERE TO BEGIN NEXT", RING_X, 158, 1);
+  }
+
+  drawCompletionBloom(now);
 }
 
 void drawAmbientFireflies(uint32_t now) {
@@ -792,6 +904,61 @@ void updateDigitFade(uint32_t now) {
   }
 }
 
+void drawFocusThought(uint32_t now, bool force = false) {
+  const bool visible = session == Session::Focus && timerState == TimerState::Running;
+  if (!visible) {
+    if (lastFocusThought != -1 || force) {
+      display.fillRect(FOCUS_THOUGHT_X, FOCUS_THOUGHT_Y,
+                       FOCUS_THOUGHT_W, FOCUS_THOUGHT_H, COL_BG);
+      lastFocusThought = -1;
+      lastFocusThoughtFrame = 0;
+      lastFocusThoughtSlot = -1;
+    }
+    return;
+  }
+
+  const uint32_t thoughtAge = elapsedMs(now);
+  const int32_t thoughtSlot = int32_t(thoughtAge / FOCUS_THOUGHT_INTERVAL_MS);
+  if (thoughtSlot != lastFocusThoughtSlot || lastFocusThought < 0) {
+    uint8_t thought = uint8_t(esp_random() % FOCUS_THOUGHT_COUNT);
+    if (lastFocusThought >= 0 && thought == uint8_t(lastFocusThought)) {
+      thought = uint8_t((thought + 1 + esp_random() % (FOCUS_THOUGHT_COUNT - 1)) %
+                        FOCUS_THOUGHT_COUNT);
+    }
+    lastFocusThought = int8_t(thought);
+    lastFocusThoughtSlot = thoughtSlot;
+  }
+  const uint8_t thought = uint8_t(lastFocusThought);
+  if (!force && now - lastFocusThoughtFrame < FOCUS_THOUGHT_FRAME_MS) return;
+
+  // This small cell sits inside the ring above the countdown. Repainting only
+  // this 114x14 region keeps each animated letter independent from the timer
+  // digits and scenery.
+  display.fillRect(FOCUS_THOUGHT_X, FOCUS_THOUGHT_Y,
+                   FOCUS_THOUGHT_W, FOCUS_THOUGHT_H, COL_BG);
+  display.setTextDatum(MC_DATUM);
+  display.setTextFont(1);
+
+  const char* word = FOCUS_THOUGHTS[thought];
+  uint8_t length = 0;
+  while (word[length] != '\0') ++length;
+  const int16_t firstX = RING_X - int16_t((length - 1) * FOCUS_THOUGHT_CHAR_W / 2);
+  for (uint8_t i = 0; i < length; ++i) {
+    // A slow opacity wave travels left-to-right across a fixed baseline. Each
+    // letter has a slightly different period and phase, so the motion stays
+    // asynchronous without bouncing or drifting vertically.
+    const uint32_t period = FOCUS_THOUGHT_WAVE_PERIOD_MS + uint32_t((i % 5) * 97UL);
+    const uint32_t phaseOffset = uint32_t(i * 181UL + i * i * 17UL);
+    const uint8_t alpha = breathe(now + phaseOffset, period, 28, 185);
+    char letter[2] = {word[i], '\0'};
+    display.setTextColor(mixColor(COL_BG, COL_GREEN, alpha), COL_BG);
+    display.drawString(letter, firstX + i * FOCUS_THOUGHT_CHAR_W,
+                       FOCUS_THOUGHT_Y + 7, 1);
+  }
+  lastFocusThought = int8_t(thought);
+  lastFocusThoughtFrame = now;
+}
+
 void drawSessionStatus() {
   const uint16_t accent = baseAccent();
   const char* compactSession = session == Session::Focus ? "FOCUS" : "BREAK";
@@ -867,6 +1034,8 @@ void drawScreen(uint32_t now, bool stagedReveal = false) {
   if (stagedReveal) delay(45);
   drawButtons();
   updateRingBotanicals(now, true);
+  drawFocusThought(now, true);
+  if (timerState == TimerState::Complete) drawCompletionAlert(now, true);
 }
 
 void logState() {
@@ -956,6 +1125,11 @@ void updateStartPulse(uint32_t now) {
 }
 
 void updateAnimations(uint32_t now) {
+  if (timerState == TimerState::Complete) {
+    drawCompletionAlert(now);
+    return;
+  }
+
   updateDigitTargets(now);
   updateDigitFade(now);
   updateStartPulse(now);
@@ -963,12 +1137,14 @@ void updateAnimations(uint32_t now) {
   if (now - lastRingFrame >= 28) drawProgressRing(now);
   drawLaurelGrowth(now);
   updateRingBotanicals(now);
+  drawFocusThought(now);
 }
 
 void pollTouch(uint32_t now) {
   static uint32_t lastPoll = 0;
   static uint8_t stableSamples = 0;
   static bool held = false;
+  static uint32_t touchStartedAt = 0;
   static int16_t lastX = 0, lastY = 0;
   if (now - lastPoll < 18) return;
   lastPoll = now;
@@ -976,6 +1152,7 @@ void pollTouch(uint32_t now) {
   int16_t x = 0, y = 0;
   const bool pressed = readTouch(x, y);
   if (pressed) {
+    if (stableSamples == 0) touchStartedAt = now;
     if (stableSamples == 0 || (abs(x - lastX) < 25 && abs(y - lastY) < 25)) {
       if (stableSamples < 10) ++stableSamples;
     } else stableSamples = 1;
@@ -986,7 +1163,13 @@ void pollTouch(uint32_t now) {
   }
 
   if (held) {
-    if (inside(BTN_PRIMARY, lastX, lastY)) startOrPause(now);
+    // Completion is a modal state: every screen tap acknowledges the alert
+    // and starts the next phase. A press that began before completion cannot
+    // dismiss it accidentally; the user must make a fresh tap.
+    if (timerState == TimerState::Complete && touchStartedAt >= completedAt) {
+      Serial.println("[control] completion acknowledged");
+      advanceSession(now, true);
+    } else if (inside(BTN_PRIMARY, lastX, lastY)) startOrPause(now);
     else if (inside(BTN_RESET, lastX, lastY)) resetSession(now);
     else if (inside(BTN_NEXT, lastX, lastY)) skipSession(now);
   }
@@ -1044,9 +1227,6 @@ void loop() {
     completedAt = now;
     logState();
     drawScreen(now);
-  } else if (timerState == TimerState::Complete && now - completedAt >= completeHoldMs()) {
-    advanceSession(now, true);
-    now = millis();
   }
 
   updateAnimations(now);

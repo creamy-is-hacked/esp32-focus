@@ -12,9 +12,10 @@ A polished, fully offline Pomodoro timer for an ESP32 with a 320×240 touch disp
 - The thin circular ring begins empty and grows clockwise with elapsed time using flicker-free incremental updates.
 - Changed countdown digits fade independently while unchanged digits remain stationary, with the complete timer kept inside the progress circle.
 - Compact in-ring labels keep Focus, Break, running, resting, and paused states clear of the progress circle.
+- While Focus is actively running, a rotating set of 30 small thinking words gently fades in and out above the countdown; Break screens leave this area clear.
 - The top bar shows `Runtime : HH:MM:SS`, the total uptime since the device booted.
 - **Ready** shows a stable Start indicator, **Start** produces one short accent pulse, and **Paused** softly breathes the dimmed progress ring.
-- Completion fills the ring, performs one bright sweep, then advances automatically.
+- Completion fills the ring and opens a repeating botanical bloom alert that stays visible until the screen is tapped.
 - The four header dots show focus-cycle progress: green is complete, peach is current, and dim dots remain.
 
 ## Hardware
@@ -46,7 +47,7 @@ The display runs in landscape rotation 1 over HSPI at 26 MHz. These values come 
 - **RESET** restores the current session to its full duration.
 - **NEXT** advances to the next session without auto-starting it.
 - Focus sessions are 25 minutes, short breaks are 5 minutes, and every fourth focus is followed by a 15-minute long break.
-- A completed session briefly shows **Session complete**, advances automatically, and starts the next session.
+- A completed session shows a persistent **Phase complete** botanical alert. Tap anywhere on the screen to dismiss it and start the next session; phases never advance on their own.
 - The four dots at the top-right show progress through the current focus cycle.
 - **Runtime** shows total elapsed time since boot in the top bar.
 
