@@ -4,10 +4,10 @@ A polished, fully offline Pomodoro timer for an ESP32 with a 320×240 touch disp
 
 ## Interface
 
-- Startup opens with a calm botanical loading splash before revealing the timer.
-- Focus, short-break, and long-break sessions each have a custom transition screen with a duration pill and restrained progress flourish.
+- Startup opens with a unique moonlit-observatory loading splash: orbital arcs, a glowing seed emblem, fireflies, and layered botanical silhouettes.
+- Focus, short-break, and long-break sessions each have a distinct artistic transition screen with a duration pill and restrained progress flourish.
 - Layered hills, contour lines, foreground sprigs, and softly flickering fireflies give the scenery greater depth.
-- Screen changes use a dark botanical veil and staged content reveal; four fireflies move around the upper progress circle, four more roam gently through the side scenery, and seven background lights softly flicker.
+- Splash transitions use a full-panel backlight fade to black, render the next scene, and fade it back in; there are no sliding veils or staged reveals. Four fireflies move around the upper progress circle, four more roam gently through the side scenery, and seven background lights softly flicker.
 - A detailed laurel frame surrounds the timer, growing twelve paired botanical milestones from bottom to top with companion leaves, fine veins, peach buds, and a restrained glow.
 - The thin circular ring begins empty and grows clockwise with elapsed time using flicker-free incremental updates.
 - Changed countdown digits fade independently while unchanged digits remain stationary, with the complete timer kept inside the progress circle.

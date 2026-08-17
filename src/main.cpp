@@ -20,6 +20,8 @@ constexpr uint8_t LONG_BREAK_MINUTES = 15;
 constexpr uint8_t FOCUSES_PER_CYCLE = 4;
 constexpr uint32_t STARTUP_SPLASH_MS = 2400;
 constexpr uint32_t SESSION_SPLASH_MS = 1050;
+constexpr uint32_t SPLASH_FADE_OUT_MS = 260;
+constexpr uint32_t SPLASH_FADE_IN_MS = 520;
 constexpr uint32_t COMPLETION_FRAME_MS = 42;
 constexpr uint32_t FOCUS_THOUGHT_FRAME_MS = 30;
 constexpr uint32_t FOCUS_THOUGHT_TRANSITION_MS = 1050;
@@ -77,6 +79,7 @@ uint32_t runStartedAt = 0;
 uint32_t completedAt = 0;
 uint32_t lastHealthLog = 0;
 uint32_t lastCompletionFrame = 0;
+uint8_t backlightLevel = 255;
 
 char visibleDigits[4] = {'2', '5', '0', '0'};
 char fromDigits[4] = {'2', '5', '0', '0'};
@@ -378,35 +381,164 @@ void drawAmbientFireflies(uint32_t now) {
   }
 }
 
-void drawVeilClose(uint16_t accent) {
-  constexpr int16_t STRIP_W = 16;
-  for (int16_t x = 0; x < SCREEN_W; x += STRIP_W) {
-    if (x > 0) display.drawFastVLine(x - 1, 0, SCREEN_H, COL_BG);
-    display.fillRect(x, 0, min<int16_t>(STRIP_W, SCREEN_W - x), SCREEN_H, COL_BG);
-    display.drawFastVLine(min<int16_t>(SCREEN_W - 1, x + STRIP_W - 1), 0, SCREEN_H,
-                          mixColor(COL_BG, accent, 105));
-    delay(9);
-  }
-  display.drawFastVLine(SCREEN_W - 1, 0, SCREEN_H, COL_BG);
+void setBacklight(uint8_t level) {
+  backlightLevel = level;
+  analogWrite(BACKLIGHT_PIN, level);
 }
 
-void drawSplashLandscape(uint16_t accent) {
-  display.fillScreen(COL_BG);
-  display.fillCircle(38, 63, 18, mixColor(COL_BG, COL_PEACH, 72));
-  display.fillTriangle(0, 182, 0, 240, 124, 240, COL_DEEP);
-  display.fillTriangle(0, 213, 91, 157, 184, 240, COL_SURFACE);
-  display.fillTriangle(92, 240, 226, 174, 320, 232, COL_PRIMARY);
-  display.fillTriangle(211, 240, 320, 174, 320, 240, COL_DEEP);
+void fadeBacklightTo(uint8_t target, uint32_t duration) {
+  const uint8_t start = backlightLevel;
+  const uint32_t startedAt = millis();
+  while (true) {
+    const uint32_t age = millis() - startedAt;
+    const float linear = duration == 0 ? 1.0f : min(1.0f, float(age) / float(duration));
+    const float eased = linear * linear * (3.0f - 2.0f * linear);
+    const int16_t delta = int16_t(target) - int16_t(start);
+    setBacklight(uint8_t(constrain(int16_t(start) + int16_t(roundf(delta * eased)), 0, 255)));
+    if (linear >= 1.0f) break;
+    delay(16);
+  }
+}
 
-  const uint16_t contour = mixColor(COL_BG, accent, 42);
-  display.drawEllipse(38, 63, 43, 27, contour);
-  display.drawEllipse(38, 63, 55, 35, contour);
-  display.drawEllipse(279, 126, 50, 30, mixColor(COL_BG, accent, 34));
-  display.drawEllipse(279, 126, 61, 38, mixColor(COL_BG, accent, 29));
-  drawBotanicalSprig(7, 190, 1, mixColor(COL_BG, COL_PRIMARY, 185));
-  drawBotanicalSprig(313, 190, -1, mixColor(COL_BG, COL_PRIMARY, 185));
-  display.drawPixel(285, 52, mixColor(COL_BG, accent, 150));
-  display.drawPixel(298, 79, mixColor(COL_BG, COL_PEACH, 155));
+void beginSplashTransition() {
+  fadeBacklightTo(0, SPLASH_FADE_OUT_MS);
+  display.fillScreen(COL_BG);
+}
+
+void drawSplashArc(int16_t centerX, int16_t centerY, int16_t radiusX, int16_t radiusY,
+                  float startAngle, float endAngle, uint16_t color) {
+  bool hasPrevious = false;
+  int16_t previousX = 0;
+  int16_t previousY = 0;
+  for (float angle = startAngle; angle <= endAngle; angle += 5.0f) {
+    const float radians = angle * DEG_TO_RAD;
+    const int16_t x = centerX + int16_t(roundf(cosf(radians) * radiusX));
+    const int16_t y = centerY + int16_t(roundf(sinf(radians) * radiusY));
+    if (hasPrevious) display.drawLine(previousX, previousY, x, y, color);
+    previousX = x;
+    previousY = y;
+    hasPrevious = true;
+  }
+}
+
+void drawSplashStars(uint32_t now, uint16_t accent) {
+  constexpr int16_t X[12] = {22, 47, 78, 112, 137, 184, 215, 248, 281, 303, 67, 257};
+  constexpr int16_t Y[12] = {32, 72, 24, 54, 30, 28, 57, 22, 68, 42, 109, 104};
+  for (uint8_t i = 0; i < 12; ++i) {
+    const uint8_t glow = breathe(now + i * 173UL, 1900UL + i * 83UL, 46, 190);
+    const uint16_t color = mixColor(COL_BG, i % 4 == 0 ? accent : COL_PEACH, glow);
+    display.drawPixel(X[i], Y[i], color);
+    if (glow > 150 && i % 3 == 0) display.drawPixel(X[i] + 1, Y[i], color);
+  }
+}
+
+void drawSeedEmblem(int16_t centerX, int16_t centerY, uint16_t accent) {
+  const uint16_t vein = mixColor(COL_BG, COL_PRIMARY, 150);
+  display.drawLine(centerX, centerY + 15, centerX, centerY - 14, vein);
+  display.fillTriangle(centerX, centerY - 1,
+                       centerX + 15, centerY - 15,
+                       centerX + 10, centerY + 5, accent);
+  display.fillTriangle(centerX - 1, centerY + 1,
+                       centerX - 12, centerY - 11,
+                       centerX - 8, centerY + 7, mixColor(COL_BG, accent, 190));
+  display.drawLine(centerX + 2, centerY - 2, centerX + 10, centerY - 10, vein);
+  display.fillCircle(centerX, centerY + 16, 2, COL_PEACH);
+}
+
+const char* transitionTitle();
+const char* transitionCopy();
+const char* transitionDuration();
+
+void drawStartupArtwork() {
+  display.fillScreen(COL_BG);
+
+  // The startup screen is a small moonlit observatory: concentric orbital
+  // paths frame a glowing seed, while the low horizon keeps the composition
+  // grounded instead of reading like a generic loading card.
+  constexpr int16_t ORBIT_X = 160;
+  constexpr int16_t ORBIT_Y = 78;
+  display.fillCircle(ORBIT_X, ORBIT_Y, 42, mixColor(COL_BG, COL_PEACH, 18));
+  display.fillCircle(ORBIT_X, ORBIT_Y, 31, mixColor(COL_BG, COL_PEACH, 28));
+  display.fillCircle(ORBIT_X, ORBIT_Y, 21, mixColor(COL_BG, COL_PEACH, 44));
+  display.drawEllipse(ORBIT_X, ORBIT_Y, 52, 25, mixColor(COL_BG, COL_GREEN, 70));
+  display.drawEllipse(ORBIT_X, ORBIT_Y, 73, 36, mixColor(COL_BG, COL_PRIMARY, 210));
+  drawSplashArc(ORBIT_X, ORBIT_Y, 94, 47, 198.0f, 344.0f, mixColor(COL_BG, COL_GREEN, 68));
+  drawSplashArc(ORBIT_X, ORBIT_Y, 94, 47, 18.0f, 132.0f, mixColor(COL_BG, COL_PEACH, 50));
+  drawSeedEmblem(ORBIT_X, ORBIT_Y - 2, COL_GREEN);
+
+  // A layered horizon and quiet corner stems make startup feel like a place,
+  // not merely a preloader.
+  display.fillTriangle(0, 190, 0, 240, 120, 240, COL_DEEP);
+  display.fillTriangle(0, 215, 82, 170, 183, 240, COL_SURFACE);
+  display.fillTriangle(91, 240, 220, 181, 320, 229, COL_PRIMARY);
+  display.fillTriangle(206, 240, 320, 174, 320, 240, COL_DEEP);
+  drawBotanicalSprig(8, 206, 1, mixColor(COL_BG, COL_PRIMARY, 220));
+  drawBotanicalSprig(312, 206, -1, mixColor(COL_BG, COL_PRIMARY, 220));
+  display.drawLine(74, 199, 96, 169, mixColor(COL_BG, COL_GREEN, 62));
+  display.drawLine(246, 199, 224, 169, mixColor(COL_BG, COL_GREEN, 62));
+  drawSplashStars(millis(), COL_GREEN);
+
+  display.setTextDatum(MC_DATUM);
+  display.setTextColor(COL_CREAM, COL_BG);
+  display.drawString("ESP32 FOCUS", RING_X, 132, 2);
+  display.setTextColor(COL_MUTED, COL_BG);
+  display.drawString("MOONLIT OBSERVATORY", RING_X, 149, 1);
+}
+
+void drawSessionArtwork(uint16_t accent) {
+  display.fillScreen(COL_BG);
+  const uint16_t quiet = mixColor(COL_BG, accent, 48);
+  const uint16_t deepAccent = mixColor(COL_BG, accent, 92);
+
+  // Each phase receives its own small visual metaphor while sharing the same
+  // night-garden language as startup.
+  if (session == Session::Focus) {
+    display.fillCircle(RING_X, 83, 37, mixColor(COL_BG, accent, 18));
+    display.drawEllipse(RING_X, 83, 47, 22, quiet);
+    display.drawEllipse(RING_X, 83, 70, 32, mixColor(COL_BG, accent, 62));
+    drawSplashArc(RING_X, 83, 91, 42, 205.0f, 330.0f, deepAccent);
+    drawSplashArc(RING_X, 83, 91, 42, 26.0f, 115.0f, mixColor(COL_BG, COL_PEACH, 45));
+    drawSeedEmblem(RING_X, 78, accent);
+    display.fillCircle(75, 67, 2, COL_PEACH);
+    display.fillCircle(246, 54, 2, accent);
+    display.drawLine(44, 182, 76, 145, quiet);
+    display.drawLine(276, 182, 244, 145, quiet);
+  } else if (session == Session::ShortBreak) {
+    display.fillCircle(160, 87, 39, mixColor(COL_BG, COL_PEACH, 16));
+    display.drawEllipse(160, 87, 61, 28, mixColor(COL_BG, COL_PEACH, 55));
+    display.drawEllipse(160, 87, 90, 41, quiet);
+    drawSplashArc(160, 87, 105, 46, 195.0f, 304.0f, mixColor(COL_BG, COL_PEACH, 66));
+    display.drawLine(117, 78, 151, 78, accent);
+    display.drawLine(127, 88, 168, 88, mixColor(COL_BG, accent, 205));
+    display.drawLine(140, 98, 181, 98, mixColor(COL_BG, COL_PEACH, 170));
+    drawLeaf(194, 91, accent);
+    drawLeaf(117, 108, mixColor(COL_BG, accent, 185));
+    display.fillCircle(70, 59, 2, COL_PEACH);
+    display.fillCircle(261, 114, 2, accent);
+  } else {
+    // Long break: a crescent moon and slow constellation, with foliage kept
+    // low so the screen feels spacious and restorative.
+    display.fillCircle(160, 80, 27, mixColor(COL_BG, COL_CREAM, 82));
+    display.fillCircle(172, 71, 27, COL_BG);
+    display.drawEllipse(160, 80, 50, 27, quiet);
+    display.drawEllipse(160, 80, 84, 41, mixColor(COL_BG, accent, 58));
+    display.fillCircle(114, 60, 2, COL_PEACH);
+    display.fillCircle(221, 52, 2, accent);
+    display.fillCircle(249, 98, 1, COL_PEACH);
+    drawSplashArc(160, 80, 105, 47, 210.0f, 318.0f, deepAccent);
+    drawBotanicalSprig(17, 190, 1, mixColor(COL_BG, accent, 180));
+    drawBotanicalSprig(303, 190, -1, mixColor(COL_BG, accent, 180));
+  }
+
+  display.setTextDatum(MC_DATUM);
+  display.fillRoundRect(130, 126, 60, 20, 10, COL_SURFACE);
+  display.drawRoundRect(130, 126, 60, 20, 10, mixColor(COL_SURFACE, accent, 105));
+  display.setTextColor(COL_PEACH, COL_SURFACE);
+  display.drawString(transitionDuration(), RING_X, 136, 1);
+  display.setTextColor(COL_CREAM, COL_BG);
+  display.drawString(transitionTitle(), RING_X, 166, 4);
+  display.setTextColor(COL_MUTED, COL_BG);
+  display.drawString(transitionCopy(), RING_X, 188, 1);
 }
 
 const char* transitionTitle() {
@@ -438,20 +570,16 @@ void drawProgressFlourish(int16_t x, int16_t y, int16_t width, float progress, u
 }
 
 void showStartupSplash() {
-  drawSplashLandscape(COL_GREEN);
-  delay(45);
-  drawLeaf(148, 51, COL_GREEN, 2);
-  delay(45);
-
+  beginSplashTransition();
+  drawStartupArtwork();
   display.setTextDatum(MC_DATUM);
-  display.setTextColor(COL_CREAM, COL_BG);
-  display.drawString("ESP32 FOCUS", RING_X, 91, 2);
-  display.setTextColor(COL_MUTED, COL_BG);
-  display.drawString("AWAKENING DISPLAY", RING_X, 119, 1);
+  display.setTextColor(mixColor(COL_BG, COL_GREEN, 190), COL_BG);
+  display.drawString("TUNING THE SIGNAL", RING_X, 164, 1);
+  fadeBacklightTo(255, SPLASH_FADE_IN_MS);
 
-  constexpr int16_t BAR_X = 72;
-  constexpr int16_t BAR_Y = 144;
-  constexpr int16_t BAR_W = 176;
+  constexpr int16_t BAR_X = 90;
+  constexpr int16_t BAR_Y = 176;
+  constexpr int16_t BAR_W = 140;
   const uint32_t startedAt = millis();
   uint8_t copyStage = 0;
   while (true) {
@@ -459,58 +587,56 @@ void showStartupSplash() {
     const float linear = fminf(1.0f, float(age) / float(STARTUP_SPLASH_MS));
     const float eased = linear * linear * (3.0f - 2.0f * linear);
     drawProgressFlourish(BAR_X, BAR_Y, BAR_W, eased, COL_GREEN);
-    drawAmbientFireflies(millis());
+    drawSplashStars(millis(), COL_GREEN);
 
     const uint8_t nextStage = linear >= 0.72f ? 2 : linear >= 0.36f ? 1 : 0;
     if (nextStage != copyStage) {
       copyStage = nextStage;
-      display.fillRect(70, 113, 180, 14, COL_BG);
+      display.fillRect(70, 157, 180, 14, COL_BG);
       display.setTextDatum(MC_DATUM);
-      display.setTextColor(COL_MUTED, COL_BG);
-      display.drawString(copyStage == 1 ? "CALIBRATING TOUCH" : "READY TO FOCUS", RING_X, 119, 1);
+      display.setTextColor(copyStage == 2 ? COL_PEACH : COL_MUTED, COL_BG);
+      display.drawString(copyStage == 1 ? "CALIBRATING TOUCH" : "READY TO FOCUS", RING_X, 164, 1);
     }
     if (linear >= 1.0f) break;
     delay(32);
   }
-  delay(260);
-  drawVeilClose(COL_GREEN);
+  fadeBacklightTo(0, SPLASH_FADE_OUT_MS);
 }
 
 void showSessionSplash() {
   const uint16_t accent = baseAccent();
-  drawVeilClose(accent);
-  drawSplashLandscape(accent);
-  drawLeaf(153, 39, accent);
-  delay(55);
+  beginSplashTransition();
+  drawSessionArtwork(accent);
 
-  display.fillRoundRect(130, 62, 60, 20, 10, COL_SURFACE);
-  display.drawRoundRect(130, 62, 60, 20, 10, mixColor(COL_SURFACE, accent, 95));
   display.setTextDatum(MC_DATUM);
-  display.setTextColor(COL_PEACH, COL_SURFACE);
-  display.drawString(transitionDuration(), RING_X, 72, 1);
-  delay(55);
-
-  display.setTextColor(COL_CREAM, COL_BG);
-  display.drawString(transitionTitle(), RING_X, 105, 4);
-  delay(55);
-  display.setTextColor(COL_MUTED, COL_BG);
-  display.drawString(transitionCopy(), RING_X, 137, 1);
+  display.setTextColor(mixColor(COL_BG, accent, 185), COL_BG);
+  display.drawString("OPENING THE NEXT INTERVAL", RING_X, 205, 1);
+  fadeBacklightTo(255, SPLASH_FADE_IN_MS);
 
   constexpr int16_t BAR_X = 120;
-  constexpr int16_t BAR_Y = 158;
+  constexpr int16_t BAR_Y = 218;
   constexpr int16_t BAR_W = 80;
   const uint32_t startedAt = millis();
+  uint8_t copyStage = 0;
   while (true) {
     const uint32_t age = millis() - startedAt;
     const float linear = fminf(1.0f, float(age) / float(SESSION_SPLASH_MS));
     const float eased = linear * linear * (3.0f - 2.0f * linear);
     drawProgressFlourish(BAR_X, BAR_Y, BAR_W, eased, accent);
-    drawAmbientFireflies(millis());
+    drawSplashStars(millis(), accent);
+    const uint8_t nextStage = linear >= 0.68f ? 2 : linear >= 0.30f ? 1 : 0;
+    if (nextStage != copyStage) {
+      copyStage = nextStage;
+      display.fillRect(78, 198, 164, 14, COL_BG);
+      display.setTextDatum(MC_DATUM);
+      display.setTextColor(copyStage == 2 ? COL_PEACH : COL_MUTED, COL_BG);
+      display.drawString(copyStage == 1 ? "SETTLING INTO RHYTHM" : "LET THE MOMENT LAND",
+                         RING_X, 205, 1);
+    }
     if (linear >= 1.0f) break;
     delay(32);
   }
-  delay(120);
-  drawVeilClose(accent);
+  fadeBacklightTo(0, SPLASH_FADE_OUT_MS);
 }
 
 void drawBackdrop() {
@@ -1040,10 +1166,10 @@ void drawButtons() {
   drawSecondaryButton(BTN_NEXT, "NEXT");
 }
 
-void drawScreen(uint32_t now, bool stagedReveal = false) {
+void drawScreen(uint32_t now, bool stagedReveal = false, bool fadeIn = false) {
+  (void)stagedReveal;
   drawBackdrop();
   drawLaurelFrame();
-  if (stagedReveal) delay(45);
   drawHeader(now);
   displayedProgress = logicalProgress(now);
   lastArcAngle = lastKnobX = lastKnobY = -1;
@@ -1057,15 +1183,14 @@ void drawScreen(uint32_t now, bool stagedReveal = false) {
   }
   lastLaurelCount = 0;
   drawProgressRing(now, true);
-  if (stagedReveal) delay(45);
   drawDigitsInstant(now);
   drawSessionStatus();
   drawLaurelGrowth(now, true);
-  if (stagedReveal) delay(45);
   drawButtons();
   updateRingBotanicals(now, true);
   drawFocusThought(now, true);
   if (timerState == TimerState::Complete) drawCompletionAlert(now, true);
+  if (fadeIn) fadeBacklightTo(255, SPLASH_FADE_IN_MS);
 }
 
 void logState() {
@@ -1097,7 +1222,7 @@ void startOrPause(uint32_t now) {
     startPulseActive = true;
   }
   logState();
-  drawScreen(now, stagedReveal);
+  drawScreen(now, stagedReveal, previous == TimerState::Ready);
   if (previous == TimerState::Ready) {
     now = millis();
     runStartedAt = now;
@@ -1128,7 +1253,7 @@ void advanceSession(uint32_t now, bool autoStart) {
   timerState = autoStart ? TimerState::Running : TimerState::Ready;
   runStartedAt = now;
   logState();
-  drawScreen(now, true);
+  drawScreen(now, true, true);
   if (autoStart) runStartedAt = millis();
 }
 
@@ -1225,7 +1350,7 @@ void setup() {
   Serial.println("[hardware] ESP32 + ILI9341 320x240 + XPT2046");
 
   pinMode(BACKLIGHT_PIN, OUTPUT);
-  digitalWrite(BACKLIGHT_PIN, HIGH);
+  setBacklight(0);
   initTouch();
   display.init();
   display.setRotation(1);
@@ -1235,7 +1360,7 @@ void setup() {
 
   showStartupSplash();
 
-  drawScreen(millis(), true);
+  drawScreen(millis(), true, true);
   logState();
   Serial.println("[ready] botanical UI + touch controls active");
 #ifdef ESP32_FOCUS_SELF_TEST
